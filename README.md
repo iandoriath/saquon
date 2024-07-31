@@ -1,1 +1,1 @@
-![Predicted vs. Actual Plot](predicted_vs_actual.png
+![Predicted vs. Actual Plot](predicted_vs_actual.png)
