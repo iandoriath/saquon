@@ -14,13 +14,13 @@ passing_summary = tibble()
 
 for(i in 1:length(filename_addons)){
     rushing_summary = rushing_summary %>% 
-      bind_rows(read_csv(paste0('rushing_summary', filename_addons[i], '.csv')) %>% mutate(year=2024-i))
+      bind_rows(read_csv(paste0('data/rushing_summary', filename_addons[i], '.csv')) %>% mutate(year=2024-i))
     
     offense_run_blocking = offense_run_blocking %>% 
-      bind_rows(read_csv(paste0('offense_run_blockng', filename_addons[i], '.csv')) %>% mutate(year=2024-i))
+      bind_rows(read_csv(paste0('data/offense_run_blockng', filename_addons[i], '.csv')) %>% mutate(year=2024-i))
     
     passing_summary = passing_summary %>% 
-      bind_rows(read_csv(paste0('passing_summary', filename_addons[i], '.csv')) %>% mutate(year=2024-i))
+      bind_rows(read_csv(paste0('data/passing_summary', filename_addons[i], '.csv')) %>% mutate(year=2024-i))
 }
 
 offense_run_blocking = offense_run_blocking %>% 
