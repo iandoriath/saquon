@@ -5,7 +5,6 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import root_mean_squared_error, r2_score
 import matplotlib.pyplot as plt
-import shap
 
 # Load CSV file
 data = pd.read_csv('rb_data.csv')
@@ -35,12 +34,8 @@ features[numerical_features] = scaler.fit_transform(features[numerical_features]
 # Convert all features to float32
 features = features.astype('float32')
 
-# Train-test split
-X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=0.2, random_state=42)
-
 # Convert to DMatrix
-dtrain = xgb.DMatrix(X_train, label=y_train)
-dtest = xgb.DMatrix(X_test, label=y_test)
+dtrain = xgb.DMatrix(features, label=target)
 
 # Set parameters for XGBoost
 params = {
@@ -49,54 +44,29 @@ params = {
     'tree_method': 'hist',
     'device': 'cuda', 
     'alpha': 0.1,
-    'lambda': 1
+    'lambda': 2
 }
 
-# Train the model
+# Perform 10-fold cross-validation
+cv_results = xgb.cv(
+    params,
+    dtrain,
+    num_boost_round=100,
+    nfold=10,
+    metrics={'rmse'},
+    as_pandas=True,
+    seed=42
+)
+
+# Output the cross-validation results
+print(cv_results)
+mean_rmse = cv_results['test-rmse-mean'].min()
+std_rmse = cv_results['test-rmse-std'].min()
+print(f"10-fold CV Mean RMSE: ${255.4 * mean_rmse:.4f}M")
+print(f"10-fold CV Std RMSE: ${255.4 * std_rmse:.4f}M")
+
+# Train the model on the full dataset
 bst = xgb.train(params, dtrain, num_boost_round=100)
-
-# Predict on test data
-y_pred = bst.predict(dtest)
-
-# Test metrics
-test_rmse = root_mean_squared_error(y_test, y_pred)
-r2 = r2_score(y_test, y_pred)
-print(f"Test RMSE: {test_rmse:.4f}")
-print(f"Test R2 Score: {r2:.4f}")
-
-# Diagnostics and Visualizations
-# Feature Importance
-xgb.plot_importance(bst)
-plt.title('Feature Importance')
-plt.show()
-
-# Predicted vs. Actual
-plt.figure(figsize=(10, 6))
-plt.scatter(y_test, y_pred, alpha=0.3)
-plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], color='red', linewidth=2)
-plt.xlabel('Actual Values')
-plt.ylabel('Predicted Values')
-plt.title('Predicted vs. Actual Values')
-plt.grid(True)
-plt.show()
-
-# Residual Analysis
-residuals = y_test - y_pred
-plt.figure(figsize=(10, 6))
-plt.scatter(y_pred, residuals, alpha=0.3)
-plt.axhline(y=0, color='red', linestyle='--')
-plt.xlabel('Predicted Values')
-plt.ylabel('Residuals')
-plt.title('Residuals vs. Predicted Values')
-plt.grid(True)
-plt.show()
-
-# SHAP Analysis
-explainer = shap.Explainer(bst)
-shap_values = explainer(X_test)
-
-# Summary Plot
-shap.summary_plot(shap_values, X_test, feature_names=features.columns)
 
 # Load the new data (saquon_data.csv)
 saquon_data = pd.read_csv('saquon_data.csv')
@@ -123,6 +93,41 @@ dsaquon = xgb.DMatrix(saquon_features)
 saquon_pred = bst.predict(dsaquon)
 
 # Output the predictions
-saquon_data['estimated_apy'] = saquon_pred
+saquon_data['estimated_apy_cap_pct'] = saquon_pred
+saquon_data['estimated_apy_millions'] = np.where(
+    saquon_data.index == 0, 
+    saquon_pred * 208.2, 
+    saquon_pred * 255.4
+)
 
-print(saquon_data[['year_signed', 'apy_cap_pct', 'estimated_apy']])
+print(saquon_data[['year_signed', 'apy_cap_pct', 'estimated_apy_cap_pct', 'estimated_apy_millions']])
+
+
+# Assuming 'year_signed' is a feature in the dataset
+years = data['year_signed']
+
+# Feature Importance Plot
+xgb.plot_importance(bst)
+plt.title('Feature Importance')
+plt.show()
+
+# Residual Plot
+train_pred = bst.predict(dtrain)
+residuals = target - train_pred
+
+plt.scatter(train_pred, residuals, c=years, cmap='viridis')
+plt.colorbar(label='Year Signed')
+plt.axhline(0, color='r', linestyle='--')
+plt.xlabel('Predicted Values')
+plt.ylabel('Residuals')
+plt.title('Residual Plot')
+plt.show()
+
+# Predicted vs. Actual Plot
+plt.scatter(train_pred, target, c=years, cmap='viridis')
+plt.colorbar(label='Year Signed')
+plt.xlabel('Predicted Values')
+plt.ylabel('Actual Values')
+plt.title('Predicted vs. Actual')
+plt.plot([min(train_pred), max(train_pred)], [min(target), max(target)], color='red')  # Diagonal line
+plt.show()
